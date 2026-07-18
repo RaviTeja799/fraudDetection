@@ -12,6 +12,7 @@ Then visit:
 
 import joblib
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from schemas import TransactionInput, PredictionOutput
@@ -48,6 +49,17 @@ app = FastAPI(
     description="Random Forest fraud prediction service (Infosys Springboard project)",
     version="1.0.0",
     lifespan=lifespan,
+)
+
+# Allow the standalone frontend (opened as a local file or hosted anywhere)
+# to call this API from the browser. Wide-open origins are fine for a
+# portfolio/demo project — for a real production system this would be
+# restricted to specific known domains.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

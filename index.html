@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fraud Detection Demo</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #171a21;
+    --border: #2a2e37;
+    --text: #e7e9ec;
+    --muted: #8b909c;
+    --accent: #4f8cff;
+    --danger: #ff5c5c;
+    --safe: #34d399;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    padding: 48px 16px;
+  }
+  .wrap { width: 100%; max-width: 480px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin: 16px 0 6px;
+  }
+  label:first-child { margin-top: 0; }
+  input, select {
+    width: 100%;
+    padding: 10px 12px;
+    background: #0f1115;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 14px;
+  }
+  input:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  button {
+    width: 100%;
+    margin-top: 24px;
+    padding: 12px;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+  button:hover:not(:disabled) { filter: brightness(1.1); }
+
+  .result {
+    margin-top: 20px;
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    display: none;
+  }
+  .result.show { display: block; }
+  .result-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 15px;
+    margin-bottom: 10px;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot.fraud { background: var(--danger); }
+  .dot.safe { background: var(--safe); }
+  .row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--muted);
+    padding: 4px 0;
+  }
+  .row span:last-child { color: var(--text); font-family: monospace; }
+
+  .error {
+    margin-top: 16px;
+    color: var(--danger);
+    font-size: 13px;
+    display: none;
+  }
+  .error.show { display: block; }
+
+  .note {
+    margin-top: 24px;
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Fraud Detection Demo</h1>
+  <div class="subtitle">Random Forest model &middot; served via FastAPI on Render</div>
+
+  <div class="card">
+    <label for="kyc_verified">KYC Verified</label>
+    <select id="kyc_verified">
+      <option value="Yes">Yes</option>
+      <option value="No">No</option>
+    </select>
+
+    <label for="account_age_days">Account Age (days)</label>
+    <input type="number" id="account_age_days" value="120" min="0" />
+
+    <label for="transaction_amount">Transaction Amount (INR)</label>
+    <input type="number" id="transaction_amount" value="256369" min="1" />
+
+    <label for="channel">Channel</label>
+    <select id="channel">
+      <option value="Mobile">Mobile</option>
+      <option value="Web">Web</option>
+      <option value="POS">POS</option>
+      <option value="ATM">ATM</option>
+    </select>
+
+    <label for="timestamp">Timestamp</label>
+    <input type="datetime-local" id="timestamp" value="2025-08-12T02:10" />
+
+    <button id="submitBtn" onclick="predict()">Check Transaction</button>
+
+    <div class="error" id="errorBox"></div>
+
+    <div class="result" id="resultBox">
+      <div class="result-header">
+        <div class="dot" id="resultDot"></div>
+        <span id="resultLabel"></span>
+      </div>
+      <div class="row"><span>Fraud probability</span><span id="probVal"></span></div>
+      <div class="row"><span>Decision threshold</span><span id="threshVal"></span></div>
+    </div>
+  </div>
+
+  <div class="note">
+    Note: hosted on Render's free tier — first request after inactivity may take
+    20-50s to wake the server. Subsequent requests are fast.
+  </div>
+</div>
+
+<script>
+const API_URL = "https://frauddetection-9ivs.onrender.com/predict";
+
+async function predict() {
+  const btn = document.getElementById("submitBtn");
+  const errorBox = document.getElementById("errorBox");
+  const resultBox = document.getElementById("resultBox");
+
+  errorBox.classList.remove("show");
+  resultBox.classList.remove("show");
+  btn.disabled = true;
+  btn.textContent = "Checking (may take a moment on cold start)...";
+
+  const timestampRaw = document.getElementById("timestamp").value; // e.g. 2025-08-12T02:10
+  const payload = {
+    kyc_verified: document.getElementById("kyc_verified").value,
+    account_age_days: parseInt(document.getElementById("account_age_days").value, 10),
+    transaction_amount: parseFloat(document.getElementById("transaction_amount").value),
+    channel: document.getElementById("channel").value,
+    timestamp: timestampRaw.length === 16 ? timestampRaw + ":00" : timestampRaw,
+  };
+
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || `Request failed (${res.status})`);
+    }
+
+    const data = await res.json();
+
+    const isFraud = data.is_fraud_prediction === 1;
+    document.getElementById("resultDot").className = "dot " + (isFraud ? "fraud" : "safe");
+    document.getElementById("resultLabel").textContent = isFraud
+      ? "Flagged as Fraud"
+      : "Not Flagged as Fraud";
+    document.getElementById("probVal").textContent = data.fraud_probability.toFixed(4);
+    document.getElementById("threshVal").textContent = data.decision_threshold.toFixed(4);
+
+    resultBox.classList.add("show");
+  } catch (err) {
+    errorBox.textContent = err.message || "Something went wrong.";
+    errorBox.classList.add("show");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Check Transaction";
+  }
+}
+</script>
+</body>
+</html>
